@@ -7,7 +7,7 @@
 #  http://www.pelenz.com/mgrslib
 #  http://www.github.com/peter-e-lenz/mgrslib
 #
-#  Copyright 2017 (c) Peter E Lenz [pelenz@pelenz.com]
+#  Copyright 2017-2021 (c) Peter E Lenz [pelenz@pelenz.com]
 #  All rights reserved. 
 #
 #  MIT License
@@ -30,6 +30,7 @@
 #
 
 def _instanceTypeCheck(inst,typeof):
+    #tests if inst is of type typeof (or if typeof is a list any of the types in typeof) otherwise throws an error
     if not isinstance(typeof,list):
         typeof=[typeof]
 
@@ -51,6 +52,7 @@ def _instanceTypeCheck(inst,typeof):
 
 
 class Heading(object):
+    #host object for a single heading
     def __init__(self, name, abbr, azimuth, order):
         self.name=name
         self.abbr=abbr
@@ -96,6 +98,7 @@ class Heading(object):
     #def next(self) 
 
 class _Headings(dict):
+    #host object for a collection of headings (i.e. the Compass object)
     def __init__(self,c):
         self.iterlist__=[]
         for i in c:
@@ -127,6 +130,7 @@ class _Headings(dict):
         return self.findHeading(bearing,order)
 
     def findHeading(self,bearing,order=3):
+        #returns the nearest heading of order or below to the bearing entered
         s=361
         out=None
 
@@ -140,6 +144,7 @@ class _Headings(dict):
                     return out
         return out
 
+#source data for the Compass object
 _compass = [
     {
         'name':'North',
@@ -341,4 +346,6 @@ _compass = [
     }
 ]
 
+
+#create the Compass object it self
 Compass = _Headings(_compass)
