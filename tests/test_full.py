@@ -287,8 +287,8 @@ class TestUtilityMethods:
         assert 'langs' not in dict_result
         assert 'parent' not in dict_result
 
-    def test_with_bearing_method(self):
-        """Test withBearing__ method"""
+    def test_withBearing_method(self):
+        """Test withBearing method"""
         original_heading = Compass.findHeading(45, 3)
         new_bearing_heading = original_heading.withBearing__(120)
         

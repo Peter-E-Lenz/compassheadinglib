@@ -33,7 +33,7 @@ dev = ["pytest>=6.0", "pytest-cov", "build", "twine"]
 test = ["pytest>=6.0", "pytest-cov"]
 
 [tool.setuptools.dynamic]
-version = {attr = "compassheadinglib.__version__"}
+version = {attr = "compassheadinglib.__version__.__version__"}
 
 [tool.setuptools.packages.find]
 exclude = ["tests", "tests.*"]
