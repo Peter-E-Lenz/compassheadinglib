@@ -48,17 +48,41 @@ class Heading(object):
         else:
             return self.azimuth == azimuthB
         
-    def __gt__(self,azimuthB):
-        return float(azimuthB)<self.azimuth
-    
-    def __lt__(self,azimuthB):
-        return float(azimuthB)>self.azimuth
+    def __gt__(self, azimuthB):
+        azimuthB = float(azimuthB)
+        diff = (azimuthB - self.azimuth) % 360
+        if diff <= 180:
+            return False  # azimuthB is ahead (clockwise) by <= 180°
+        else:
+            return True   # azimuthB is behind (counter-clockwise) by > 180°
 
-    def __ge__(self,azimuthB):
-        return float(azimuthB)<=self.azimuth
+    def __lt__(self, azimuthB):
+        azimuthB = float(azimuthB)
+        diff = (azimuthB - self.azimuth) % 360
+        if diff <= 180:
+            return True   # azimuthB is ahead (clockwise) by <= 180°
+        else:
+            return False  # azimuthB is behind (counter-clockwise) by > 180°
 
-    def __le__(self,azimuthB):
-        return float(azimuthB)>=self.azimuth
+    def __ge__(self, azimuthB):
+        azimuthB = float(azimuthB)
+        if self.azimuth == azimuthB:
+            return True
+        diff = (azimuthB - self.azimuth) % 360
+        if diff <= 180:
+            return False  # azimuthB is ahead (clockwise) by <= 180°
+        else:
+            return True   # azimuthB is behind (counter-clockwise) by > 180°
+
+    def __le__(self, azimuthB):
+        azimuthB = float(azimuthB)
+        if self.azimuth == azimuthB:
+            return True
+        diff = (azimuthB - self.azimuth) % 360
+        if diff <= 180:
+            return True   # azimuthB is ahead (clockwise) by <= 180°
+        else:
+            return False  # azimuthB is behind (counter-clockwise) by > 180°
     
     def rotate(self, degrees):
         new_azimuth = (self.azimuth + degrees) % 360
