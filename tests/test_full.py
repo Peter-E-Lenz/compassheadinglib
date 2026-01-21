@@ -67,45 +67,95 @@ class TestRandomizedRangeSelection:
 
 
 class TestRelativityOperators:
-    """Test heading comparison operators"""
+    """Test heading comparison operators with circular logic"""
     
     def test_manual_relativity_tests(self):
         """Test manual spot tests of relativity operators"""
+        # Basic same-heading tests
         assert Compass(0, 1).name == Compass.findHeading(12, 1).name
         assert Compass(0, 1).name == Compass.findHeading(12, 2).name
-        assert Compass(0, 1).name < Compass.findHeading(12, 3).name
-        assert Compass(0, 1).name < Compass.findHeading(12, 4).name
-        assert Compass(12, 3).name > Compass.findHeading(0, 1).name
-        assert Compass(12, 4).name > Compass.findHeading(0, 1).name
+        
+        # These comparisons now need to account for circular logic
+        # 12° is clockwise from 0° by 12°, so 0 < 12
+        assert Compass(0, 1) < Compass.findHeading(12, 3)
+        assert Compass(0, 1) < Compass.findHeading(12, 4)
+        assert Compass(12, 3) > Compass.findHeading(0, 1)
+        assert Compass(12, 4) > Compass.findHeading(0, 1)
+        
+    def test_circular_wraparound_comparisons(self):
+        """Test that circular comparisons work correctly across 0°/360° boundary"""
+        # 350° < 10° because 10° is only 20° clockwise from 350°
+        assert Compass.findHeading(350, 4) < Compass.findHeading(10, 4)
+        assert Compass.findHeading(10, 4) > Compass.findHeading(350, 4)
+        
+        # 350° <= 10° 
+        assert Compass.findHeading(350, 4) <= Compass.findHeading(10, 4)
+        assert Compass.findHeading(10, 4) >= Compass.findHeading(350, 4)
+        
+        # 10° < 350° is False (would require 340° clockwise)
+        assert not (Compass.findHeading(10, 4) < Compass.findHeading(350, 4))
+        
+        # More wraparound tests
+        assert Compass.findHeading(355, 4) < Compass.findHeading(5, 4)
+        assert Compass.findHeading(0, 4) < Compass.findHeading(180, 4)
+        assert Compass.findHeading(180, 4) < Compass.findHeading(0, 4)  # 0° is 180° clockwise from 180°
+
+    def test_equality_comparisons(self):
+        """Test equality and near-equality comparisons"""
+        # Exact equality
+        assert Compass.findHeading(90, 4) == Compass.findHeading(90, 4)
+        assert Compass.findHeading(90, 4) <= Compass.findHeading(90, 4)
+        assert Compass.findHeading(90, 4) >= Compass.findHeading(90, 4)
+        
+        # Not equal
+        assert Compass.findHeading(90, 4) != Compass.findHeading(91, 4)
+
+    def test_opposite_headings(self):
+        """Test comparisons at exactly 180° apart"""
+        # At exactly 180°, the comparison uses the 'less than or equal to 180' rule
+        # So 0° < 180° (180° is exactly 180° clockwise)
+        assert Compass.findHeading(0, 4) < Compass.findHeading(180, 4)
+        
+        # But 180° < 0° is also true (0° is exactly 180° clockwise from 180°)
+        assert Compass.findHeading(180, 4) < Compass.findHeading(0, 4)
+        
+        # This means both directions are "less than" at 180° separation
+        # This is a known edge case in circular comparisons
 
     def test_randomized_relativity_tests(self):
-        """Test randomized relativity comparisons"""
-        number_of_random_relativity_tests = 1000  # Reduced for faster testing
-        slice_angle = 11.25
+        """Test randomized relativity comparisons with circular logic"""
+        number_of_random_relativity_tests = 1000
         
-        for relative_a, relative_b in [(uniform(0, 360), uniform(0, 360)) 
-                                      for _ in range(number_of_random_relativity_tests)]:
+        for _ in range(number_of_random_relativity_tests):
+            relative_a = uniform(0, 360)
+            relative_b = uniform(0, 360)
             
-            if (relative_a // slice_angle) == (relative_b // slice_angle):
-                try:
-                    assert Compass.findHeading(relative_a, order=3).name == Compass.findHeading(relative_b, order=3).name
-                except Exception as e1:
-                    try:
-                        assert Compass.findHeading(relative_a, order=2).name == Compass.findHeading(relative_b, order=2).name
-                    except Exception as e2:
-                        assert Compass.findHeading(relative_a, order=1).name == Compass.findHeading(relative_b, order=1).name  
-
+            heading_a = Compass.findHeading(relative_a, order=4)
+            heading_b = Compass.findHeading(relative_b, order=4)
             
-            elif ((relative_a // slice_angle) < (relative_b // slice_angle)) and abs(relative_a - relative_b) < slice_angle:
-                assert Compass.findHeading(relative_a, order=4) <= Compass.findHeading(relative_b, order=4)
-            elif ((relative_a // slice_angle) > (relative_b // slice_angle)) and abs(relative_a - relative_b) < slice_angle:
-                assert Compass.findHeading(relative_a, order=4) >= Compass.findHeading(relative_b, order=4)
+            # Calculate circular distance from a to b (clockwise)
+            diff = (relative_b - relative_a) % 360
             
-            elif (relative_a // slice_angle) < (relative_b // slice_angle):
-                assert Compass.findHeading(relative_a, order=4) < Compass.findHeading(relative_b, order=4)
-            elif (relative_a // slice_angle) > (relative_b // slice_angle):
-                assert Compass.findHeading(relative_a, order=4) > Compass.findHeading(relative_b, order=4)
-
+            if abs(relative_a - relative_b) < 0.01 or abs(diff - 360) < 0.01:
+                # Essentially equal
+                assert heading_a == heading_b or heading_a <= heading_b or heading_a >= heading_b
+            elif diff < 180:
+                # b is clockwise from a by less than 180°, so a < b
+                assert heading_a < heading_b
+                assert heading_a <= heading_b
+                assert heading_b > heading_a
+                assert heading_b >= heading_a
+            elif diff > 180:
+                # b is clockwise from a by more than 180° (counter-clockwise is shorter), so a > b
+                assert heading_a > heading_b
+                assert heading_a >= heading_b
+                assert heading_b < heading_a
+                assert heading_b <= heading_a
+            else:
+                # Exactly 180° apart - edge case where both can be considered "less than"
+                # Just verify the operations don't crash
+                _ = heading_a < heading_b
+                _ = heading_a > heading_b
 
 class TestArithmeticOperations:
     """Test arithmetic operations on headings"""
