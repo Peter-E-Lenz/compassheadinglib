@@ -397,9 +397,24 @@ class Sector(list):
         
         return mean_deg
     
-    def median(self):
+    def percentile(self, pct):
+        """
+        Calculate the percentile of headings in the sector.
+        
+        Args:
+            pct: Percentile as a decimal (0.0 to 1.0), e.g., 0.5 for median, 0.25 for 25th percentile
+            
+        Returns:
+            Float: The bearing (in degrees, 0-360) at the specified percentile
+            
+        Raises:
+            ValueError: If sector is empty or pct is out of range
+        """
         if not self:
-            raise ValueError('Cannot find median of empty Sector')
+            raise ValueError('Cannot find percentile of empty Sector')
+        
+        if not 0.0 <= pct <= 1.0:
+            raise ValueError('Percentile must be between 0.0 and 1.0')
         
         if len(self) == 1:
             return float(self[0])
@@ -415,19 +430,38 @@ class Sector(list):
             offset = (az - min_az) % 360
             relatives.append(offset)
         
-        # Sort and find median
+        # Sort and find percentile
         relatives.sort()
         n = len(relatives)
         
-        if n % 2 == 1:
-            median_offset = relatives[n // 2]
+        # Calculate position using linear interpolation between ranks
+        position = pct * (n - 1)
+        lower_idx = int(position)
+        upper_idx = min(lower_idx + 1, n - 1)
+        
+        # Interpolate if needed
+        if lower_idx == upper_idx:
+            percentile_offset = relatives[lower_idx]
         else:
-            median_offset = (relatives[n // 2 - 1] + relatives[n // 2]) / 2
+            fraction = position - lower_idx
+            percentile_offset = relatives[lower_idx] + fraction * (relatives[upper_idx] - relatives[lower_idx])
         
         # Convert back to absolute bearing
-        median_bearing = (min_az + median_offset) % 360
+        percentile_bearing = (min_az + percentile_offset) % 360
         
-        return median_bearing
+        return percentile_bearing
+    
+    def median(self):
+        """
+        Calculate the median of headings in the sector.
+        
+        Returns:
+            Float: The bearing (in degrees, 0-360) at the median (50th percentile)
+            
+        Raises:
+            ValueError: If sector is empty
+        """
+        return self.percentile(0.5)
 
 class _Headings(dict):
     #host object for a collection of headings (i.e. the Compass object)
