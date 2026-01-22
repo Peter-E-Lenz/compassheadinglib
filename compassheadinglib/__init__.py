@@ -1,12 +1,12 @@
 # compassheadinglib/__init__.py
 # Importing submodules to make them accessible at the package level
 from .common import _Headings
-import importlib.resources
+from importlib.resources import files as import_files
 from json import load as __json_load
 import sys as __sys
 import types as __types
 
-with importlib.resources.open_text('compassheadinglib', 'compass_data.json') as json_file:
+with import_files('compassheadinglib').joinpath('compass_data.json').open('r', encoding='utf-8') as json_file:
     __raw_compass = __json_load(json_file)
 
 #get all langs
