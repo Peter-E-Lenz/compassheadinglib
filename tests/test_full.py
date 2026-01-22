@@ -4,8 +4,9 @@ Combines original tests with additional coverage for untested functionality
 """
 
 import pytest
+import math
 from compassheadinglib import Compass
-from compassheadinglib.common import Heading, _instanceTypeCheck
+from compassheadinglib.common import Heading, Sector, _instanceTypeCheck
 from random import uniform
 from json import load
 from pathlib import Path
@@ -410,6 +411,375 @@ class TestEdgeCases:
         # Test negative wraparound
         result_neg = heading_0 - 90
         assert result_neg.azimuth == 270.0
+
+
+class TestSectorBasics:
+    """Test basic Sector functionality"""
+    
+    def test_sector_creation_empty(self):
+        """Test creating an empty Sector"""
+        sector = Compass.sector()
+        assert len(sector) == 0
+        assert isinstance(sector, list)
+    
+    def test_sector_creation_with_headings(self):
+        """Test creating a Sector with headings"""
+        headings = [Compass.findHeading(0, 1), Compass.findHeading(90, 1)]
+        sector = Compass.sector(headings)
+        assert len(sector) == 2
+        assert float(sector[0]) == 0
+        assert float(sector[1]) == 90
+    
+    def test_sector_append_heading(self):
+        """Test appending Heading objects"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(45, 1))
+        assert len(sector) == 1
+        assert float(sector[0]) == 45
+    
+    def test_sector_append_numeric(self):
+        """Test appending numeric values"""
+        sector = Compass.sector()
+        sector.append(45.5)
+        sector.append(90)
+        assert len(sector) == 2
+        assert abs(float(sector[0]) - 45.5) < 1  # May snap to nearest heading
+        assert float(sector[1]) == 90.0
+    
+    def test_sector_append_invalid_type(self):
+        """Test that appending invalid types raises proper error"""
+        sector = Compass.sector()
+        
+        with pytest.raises(TypeError) as excinfo:
+            sector.append("invalid")
+        
+        assert "must be a Heading or numeric type" in str(excinfo.value)
+
+
+class TestSectorSorting:
+    """Test Sector sorting functionality"""
+    
+    def test_sort_clockwise_from_min(self):
+        """Test that sort arranges headings clockwise from min"""
+        sector = Compass.sector()
+        sector.append(180)
+        sector.append(90)
+        sector.append(120)
+        
+        sector.sort()
+        
+        # After sorting, should be in clockwise order from min (90)
+        assert float(sector[0]) == 90
+        assert float(sector[1]) == 120
+        assert float(sector[2]) == 180
+    
+    def test_sort_with_wraparound(self):
+        """Test sorting with wraparound across 0°"""
+        sector = Compass.sector()
+        sector.append(350)
+        sector.append(10)
+        sector.append(5)
+        
+        sector.sort()
+        
+        # Min should be 350, then clockwise to 5, then 10
+        # Note: values may snap to nearest compass heading
+        assert float(sector[0]) >= 348  # ~350
+        assert float(sector[1]) <= 7    # ~5
+        assert float(sector[2]) <= 12   # ~10
+
+
+class TestSectorArithmetic:
+    """Test arithmetic operations on Sectors"""
+    
+    def test_sector_add_sector(self):
+        """Test Sector + Sector (concatenation)"""
+        sector1 = Compass.sector([Compass.findHeading(0, 1), Compass.findHeading(90, 1)])
+        sector2 = Compass.sector([Compass.findHeading(180, 1), Compass.findHeading(270, 1)])
+        
+        result = sector1 + sector2
+        assert len(result) == 4
+        assert float(result[0]) == 0
+        assert float(result[3]) == 270
+    
+    def test_sector_add_heading(self):
+        """Test Sector + Heading (rotation)"""
+        sector = Compass.sector([Compass.findHeading(0, 1), Compass.findHeading(90, 1)])
+        heading = Compass.findHeading(45, 1)
+        
+        result = sector + heading
+        assert len(result) == 2
+        assert float(result[0]) == 45
+        assert float(result[1]) == 135
+    
+    def test_sector_add_number(self):
+        """Test Sector + number (rotation)"""
+        sector = Compass.sector([Compass.findHeading(0, 1), Compass.findHeading(90, 1)])
+        
+        result = sector + 45
+        assert len(result) == 2
+        assert float(result[0]) == 45
+        assert float(result[1]) == 135
+    
+    def test_sector_sub_heading(self):
+        """Test Sector - Heading"""
+        sector = Compass.sector([Compass.findHeading(90, 1), Compass.findHeading(180, 1)])
+        heading = Compass.findHeading(45, 1)
+        
+        result = sector - heading
+        assert len(result) == 2
+        assert float(result[0]) == 45
+        assert float(result[1]) == 135
+    
+    def test_sector_sub_number(self):
+        """Test Sector - number"""
+        sector = Compass.sector([Compass.findHeading(90, 1), Compass.findHeading(180, 1)])
+        
+        result = sector - 45
+        assert len(result) == 2
+        assert float(result[0]) == 45
+        assert float(result[1]) == 135
+    
+    def test_sector_radd_heading(self):
+        """Test Heading + Sector"""
+        sector = Compass.sector([Compass.findHeading(0, 1), Compass.findHeading(90, 1)])
+        heading = Compass.findHeading(45, 1)
+        
+        # This should work via Sector.__radd__
+        result = heading + sector
+        assert isinstance(result, Sector)
+        assert len(result) == 2
+        # heading + sector means add heading to each element
+        assert float(result[0]) == 45  # 45 + 0
+        assert float(result[1]) == 135  # 45 + 90
+    
+    def test_sector_radd_number(self):
+        """Test number + Sector"""
+        sector = Compass.sector([Compass.findHeading(0, 1), Compass.findHeading(90, 1)])
+        
+        result = 45 + sector
+        assert isinstance(result, Sector)
+        assert len(result) == 2
+        assert float(result[0]) == 45
+        assert float(result[1]) == 135
+    
+    def test_sector_rsub_heading(self):
+        """Test Heading - Sector"""
+        sector = Compass.sector([Compass.findHeading(0, 1), Compass.findHeading(90, 1)])
+        heading = Compass.findHeading(180, 1)
+        
+        # heading - sector means subtract each element from heading
+        result = heading - sector
+        assert isinstance(result, Sector)
+        assert len(result) == 2
+        assert float(result[0]) == 180  # 180 - 0
+        assert float(result[1]) == 90   # 180 - 90
+    
+    def test_sector_rsub_number(self):
+        """Test number - Sector"""
+        sector = Compass.sector([Compass.findHeading(45, 1), Compass.findHeading(90, 1)])
+        
+        result = 180 - sector
+        assert isinstance(result, Sector)
+        assert len(result) == 2
+        assert float(result[0]) == 135  # 180 - 45
+        assert float(result[1]) == 90   # 180 - 90
+
+
+class TestSectorNavigation:
+    """Test Sector navigation methods"""
+    
+    def test_sector_port(self):
+        """Test port (left turn) on all headings in Sector"""
+        sector = Compass.sector([Compass.findHeading(90, 1), Compass.findHeading(180, 1)])
+        
+        result = sector.port(30)
+        assert len(result) == 2
+        assert float(result[0]) == 60
+        assert float(result[1]) == 150
+    
+    def test_sector_starboard(self):
+        """Test starboard (right turn) on all headings in Sector"""
+        sector = Compass.sector([Compass.findHeading(90, 1), Compass.findHeading(180, 1)])
+        
+        result = sector.starboard(30)
+        assert len(result) == 2
+        assert float(result[0]) == 120
+        assert float(result[1]) == 210
+    
+    def test_sector_left_right(self):
+        """Test left and right aliases"""
+        sector = Compass.sector([Compass.findHeading(90, 1)])
+        
+        left_result = sector.left(30)
+        assert float(left_result[0]) == 60
+        
+        right_result = sector.right(30)
+        assert float(right_result[0]) == 120
+
+
+class TestSectorMinMax:
+    """Test Sector min/max functionality"""
+    
+    def test_min_single_heading(self):
+        """Test min with single heading"""
+        sector = Compass.sector([Compass.findHeading(90, 1)])
+        assert float(sector.min()) == 90
+    
+    def test_max_single_heading(self):
+        """Test max with single heading"""
+        sector = Compass.sector([Compass.findHeading(90, 1)])
+        assert float(sector.max()) == 90
+    
+    def test_min_no_wraparound(self):
+        """Test min when all headings are in one quadrant"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(90, 1))   # East
+        sector.append(Compass.findHeading(120, 1))
+        sector.append(Compass.findHeading(180, 1))  # South
+        
+        min_heading = sector.min()
+        # Min should be the start of the smallest arc containing all headings
+        # From 90°, the arc to 180° is 90° clockwise
+        # This is the smallest containing arc, so min should be 90°
+        assert float(min_heading) == 90
+    
+    def test_max_no_wraparound(self):
+        """Test max when all headings are in one quadrant"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(90, 1))
+        sector.append(Compass.findHeading(120, 1))
+        sector.append(Compass.findHeading(180, 1))
+        
+        max_heading = sector.max()
+        # Max should be furthest clockwise from min (90°), which is 180°
+        assert float(max_heading) == 180
+    
+    def test_min_with_wraparound(self):
+        """Test min with wraparound across 0°"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(350, 1))
+        sector.append(Compass.findHeading(10, 1))
+        sector.append(Compass.findHeading(20, 1))
+        
+        min_heading = sector.min()
+        # Smallest arc is from 350° clockwise to 20°, so min is 350°
+        assert float(min_heading) >= 337.5  # May snap to NNW at 337.5
+    
+    def test_min_max_opposite_headings(self):
+        """Test min/max with headings at opposite ends"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(0, 1))    # North
+        sector.append(Compass.findHeading(180, 1))  # South
+        
+        min_heading = sector.min()
+        max_heading = sector.max()
+        
+        # With two headings 180° apart, min should be the one with smallest max clockwise distance
+        # Both have max distance of 180°, so tiebreaker chooses smaller azimuth = 0°
+        assert float(min_heading) == 0
+        # Max should be the heading with maximum clockwise distance from min (0°)
+        # 180° is 180° clockwise from 0°, so max is 180°
+        assert float(max_heading) == 180
+    
+    def test_min_empty_sector(self):
+        """Test that min raises error on empty Sector"""
+        sector = Compass.sector()
+        with pytest.raises(ValueError):
+            sector.min()
+    
+    def test_max_empty_sector(self):
+        """Test that max raises error on empty Sector"""
+        sector = Compass.sector()
+        with pytest.raises(ValueError):
+            sector.max()
+
+
+class TestSectorStatistics:
+    """Test Sector statistical methods"""
+    
+    def test_relative_bearings(self):
+        """Test relative bearings calculation"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(350, 1))
+        sector.append(Compass.findHeading(10, 1))
+        sector.append(Compass.findHeading(30, 1))
+        
+        relatives = sector.relative_bearings()
+        # Min may snap to nearest heading, so be flexible
+        assert len(relatives) == 3
+        # First should be 0 (it's the min)
+        assert relatives[0] == 0
+    
+    def test_mean_simple(self):
+        """Test circular mean with simple case"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(0, 1))
+        sector.append(Compass.findHeading(90, 1))
+        
+        mean = sector.mean()
+        # Mean of 0° and 90° should be around 45°
+        assert abs(mean - 45) < 1
+    
+    def test_mean_wraparound(self):
+        """Test circular mean with wraparound"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(350, 1))
+        sector.append(Compass.findHeading(10, 1))
+        
+        mean = sector.mean()
+        # Mean of 350° and 10° should be around 0°
+        assert mean < 5 or mean > 355
+    
+    def test_median_odd_count(self):
+        """Test median with odd number of headings"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(90, 1))
+        sector.append(Compass.findHeading(120, 1))
+        sector.append(Compass.findHeading(150, 1))
+        
+        median = sector.median()
+        # Median should be 120°
+        assert abs(median - 120) < 1
+    
+    def test_median_even_count(self):
+        """Test median with even number of headings"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(90, 1))
+        sector.append(Compass.findHeading(180, 1))
+        
+        median = sector.median()
+        # Median should be 135° (average of 90 and 180)
+        assert abs(median - 135) < 1
+
+
+class TestSectorIntegration:
+    """Integration tests for Sector functionality"""
+    
+    def test_sector_workflow(self):
+        """Test a complete workflow with Sector"""
+        # Create sector
+        sector = Compass.sector()
+        sector.append(0)
+        sector.append(90)
+        sector.append(180)
+        
+        # Rotate
+        rotated = sector + 45
+        assert float(rotated[0]) == 45
+        
+        # Sort
+        rotated.sort()
+        assert float(rotated[0]) == 45
+        
+        # Statistics
+        mean = rotated.mean()
+        assert mean > 0  # Should have a valid mean
+        
+        # Min/Max
+        min_h = rotated.min()
+        max_h = rotated.max()
+        assert float(min_h) <= float(max_h) or (float(min_h) > 180 and float(max_h) < 180)
 
 
 class TestMultiLanguageSupport:
