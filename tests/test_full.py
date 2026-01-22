@@ -872,6 +872,129 @@ class TestMultiLanguageSupport:
             assert lang_compass[0]['Order'] == lang_compass[-1]['Order'], f'Wrap around test fail: Order for {lang}'
             assert lang_compass[0]['Azimuth'] < lang_compass[-1]['Azimuth'], f'Wrap around test fail: Azimuth for {lang}'
 
+    
+class TestSectorPercentile:
+    """Test Sector percentile and median methods"""
+
+    def test_percentile_single_heading(self):
+        """Test percentile with single heading"""
+        sector = Compass.sector([Compass.findHeading(90, 1)])
+        assert sector.percentile(0.5) == 90.0
+        assert sector.percentile(0.0) == 90.0
+        assert sector.percentile(1.0) == 90.0
+    
+    def test_percentile_two_headings(self):
+        """Test percentile with two headings"""
+        sector = Compass.sector([Compass.findHeading(0, 1), Compass.findHeading(90, 1)])
+        
+        # 0th percentile should be 0°
+        assert sector.percentile(0.0) == 0.0
+        
+        # 100th percentile should be 90°
+        assert sector.percentile(1.0) == 90.0
+        
+        # 50th percentile (median) should be 45°
+        assert sector.percentile(0.5) == 45.0
+    
+    def test_percentile_odd_count(self):
+        """Test percentile with odd number of headings"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(0, 1))
+        sector.append(Compass.findHeading(90, 1))
+        sector.append(Compass.findHeading(180, 1))
+        
+        # 0th percentile
+        p0 = sector.percentile(0.0)
+        assert p0 == 0.0
+        
+        # 50th percentile (median) - should be middle value
+        p50 = sector.percentile(0.5)
+        assert p50 == 90.0
+        
+        # 100th percentile
+        p100 = sector.percentile(1.0)
+        assert p100 == 180.0
+    
+    def test_percentile_even_count(self):
+        """Test percentile with even number of headings"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(0, 1))
+        sector.append(Compass.findHeading(60, 1))
+        sector.append(Compass.findHeading(120, 1))
+        sector.append(Compass.findHeading(180, 1))
+        
+        # 25th percentile - position 0.75, interpolating between indices 0 and 1
+        # 75% of way from 0° to 60° = 45°
+        p25 = sector.percentile(0.25)
+        assert abs(p25 - 45.0) < 1
+        
+        # 50th percentile - position 1.5, interpolating between indices 1 and 2
+        # 50% of way from 60° to 120° = 90°
+        p50 = sector.percentile(0.5)
+        assert abs(p50 - 90.0) < 1
+        
+        # 75th percentile - position 2.25, interpolating between indices 2 and 3
+        # 25% of way from 120° to 180° = 135°
+        p75 = sector.percentile(0.75)
+        assert abs(p75 - 135.0) < 1
+    
+    def test_percentile_with_wraparound(self):
+        """Test percentile with wraparound across 0°"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(350, 1))
+        sector.append(Compass.findHeading(0, 1))
+        sector.append(Compass.findHeading(10, 1))
+        
+        # Median should be near 0°
+        median = sector.percentile(0.5)
+        assert median < 5 or median > 355
+    
+    def test_percentile_invalid_range(self):
+        """Test that percentile raises error for out-of-range values"""
+        sector = Compass.sector([Compass.findHeading(90, 1)])
+        
+        with pytest.raises(ValueError) as excinfo:
+            sector.percentile(-0.1)
+        assert "must be between 0.0 and 1.0" in str(excinfo.value)
+        
+        with pytest.raises(ValueError) as excinfo:
+            sector.percentile(1.5)
+        assert "must be between 0.0 and 1.0" in str(excinfo.value)
+    
+    def test_percentile_empty_sector(self):
+        """Test that percentile raises error on empty sector"""
+        sector = Compass.sector()
+        
+        with pytest.raises(ValueError) as excinfo:
+            sector.percentile(0.5)
+        assert "Cannot find percentile of empty Sector" in str(excinfo.value)
+    
+    def test_median_wrapper(self):
+        """Test that median() properly wraps percentile(0.5)"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(90, 1))
+        sector.append(Compass.findHeading(120, 1))
+        sector.append(Compass.findHeading(150, 1))
+        
+        median = sector.median()
+        p50 = sector.percentile(0.5)
+        
+        assert median == p50
+        assert abs(median - 120) < 1
+    
+    def test_percentile_interpolation(self):
+        """Test that percentile properly interpolates between values"""
+        sector = Compass.sector()
+        sector.append(Compass.findHeading(0, 1))
+        sector.append(Compass.findHeading(100, 1))
+        
+        # At 25%, should be 25% of the way from 0 to 100
+        p25 = sector.percentile(0.25)
+        assert abs(p25 - 25.0) < 1
+        
+        # At 75%, should be 75% of the way from 0 to 100
+        p75 = sector.percentile(0.75)
+        assert abs(p75 - 75.0) < 1
 
 if __name__ == "__main__":
     # Run tests with pytest when script is executed directly
